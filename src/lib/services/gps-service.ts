@@ -1,6 +1,7 @@
 import { supabase } from '../supabase'
 import { BaseService } from './base-service'
 import type { GpsLog } from '../database.types'
+import { privacyService } from './privacy-service'
 
 export interface CreateGpsLogData {
   employee_id: string
@@ -22,6 +23,13 @@ export interface LocationError {
 export class GpsService extends BaseService {
   async logLocation(data: CreateGpsLogData): Promise<GpsLog> {
     try {
+      // Check if location tracking is allowed
+      const isLocationAllowed = await privacyService.isLocationTrackingAllowed(data.employee_id)
+      if (!isLocationAllowed) {
+        console.warn('Location tracking not allowed for employee:', data.employee_id)
+        throw new Error('Location tracking not allowed')
+      }
+
       const { data: log, error } = await this.client
         .from('gps_logs')
         .insert({

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import { Icon, LatLngExpression } from 'leaflet'
 import { useActiveEmployeesLocations } from '../../hooks/use-gps'
+import { useRealtimeLocations } from '../../hooks/use-realtime'
 import { useAuthStore } from '../../stores/auth-store'
-import { MapPin, User, Clock, Navigation } from 'lucide-react'
+import { MapPin, User, Clock, Navigation, Wifi, WifiOff } from 'lucide-react'
 import { Spinner3D } from '../shared/3d-spinner'
 
 // Fix for default markers in Leaflet with React
@@ -31,18 +32,35 @@ interface EmployeeLocation {
 interface RealTimeMapProps {
   className?: string
   height?: string
+  showConnectionStatus?: boolean
+  autoRefresh?: boolean
 }
 
-export function RealTimeMap({ className = '', height = 'h-96' }: RealTimeMapProps) {
+export function RealTimeMap({ 
+  className = '', 
+  height = 'h-96',
+  showConnectionStatus = true,
+  autoRefresh = true
+}: RealTimeMapProps) {
   const { user } = useAuthStore()
   const mapRef = useRef<any>(null)
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null)
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   
   const { data: employeeLocations, isLoading } = useActiveEmployeesLocations()
+  const { isConnected, lastLocationUpdate, hasLocationSubscription } = useRealtimeLocations()
 
   // Default center (Montreal coordinates)
   const defaultCenter: LatLngExpression = [45.5017, -73.5673]
 
+  // Update last update timestamp when new data arrives
+  useEffect(() => {
+    if (lastLocationUpdate) {
+      setLastUpdate(new Date())
+    }
+  }, [lastLocationUpdate])
+
+  // Auto-fit map to show all employees
   useEffect(() => {
     if (mapRef.current && employeeLocations?.length) {
       const bounds = mapRef.current.getBounds()
@@ -53,11 +71,17 @@ export function RealTimeMap({ className = '', height = 'h-96' }: RealTimeMapProp
     }
   }, [employeeLocations])
 
-  const getEmployeeIcon = (isActive: boolean) => {
+  const getEmployeeIcon = (isActive: boolean, isRealtime: boolean) => {
+    let iconUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTEyIDZDNi40OCA2IDIgMTAuNDggMiAxNkMyIDIxLjUyIDYuNDggMjYgMTIgMjZDMjEuNTIgMjYgMjYgMjEuNTIgMjYgMTZDMjYgMTAuNDggMjEuNTIgNiAxMiA2WiIgZmlsbD0iI0E1QTVBNSIvPgo8L3N2Zz4K'
+
+    if (isActive && isRealtime) {
+      iconUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiMyMkM1NUYiLz4KPHBhdGggZD0iTTEyIDZDNi40OCA2IDIgMTAuNDggMiAxNkMyIDIxLjUyIDYuNDggMjYgMTIgMjZDMjEuNTIgMjYgMjYgMjEuNTIgMjYgMTZDMjYgMTAuNDggMjEuNTIgNiAxMiA2WiIgZmlsbD0iIzRBRDVGMyIvPgo8L3N2Zz4K'
+    } else if (isActive) {
+      iconUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiNGQjkyMzQiLz4KPHBhdGggZD0iTTEyIDZDNi40OCA2IDIgMTAuNDggMiAxNkMyIDIxLjUyIDYuNDggMjYgMTIgMjZDMjEuNTIgMjYgMjYgMjEuNTIgMjYgMTZDMjYgMTAuNDggMjEuNTIgNiAxMiA2WiIgZmlsbD0iI0Y1NzcyNiIvPgo8L3N2Zz4K'
+    }
+
     return new Icon({
-      iconUrl: isActive 
-        ? 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiMyMkM1NUYiLz4KPHBhdGggZD0iTTEyIDZDNi40OCA2IDIgMTAuNDggMiAxNkMyIDIxLjUyIDYuNDggMjYgMTIgMjZDMjEuNTIgMjYgMjYgMjEuNTIgMjYgMTZDMjYgMTAuNDggMjEuNTIgNiAxMiA2WiIgZmlsbD0iIzRBRDVGMyIvPgo8L3N2Zz4K'
-        : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTEyIDZDNi40OCA2IDIgMTAuNDggMiAxNkMyIDIxLjUyIDYuNDggMjYgMTIgMjZDMjEuNTIgMjYgMjYgMjEuNTIgMjYgMTZDMjYgMTAuNDggMjEuNTIgNiAxMiA2WiIgZmlsbD0iI0E1QTVBNSIvPgo8L3N2Zz4K',
+      iconUrl,
       iconSize: [25, 25],
       iconAnchor: [12, 12],
       popupAnchor: [0, -12]
@@ -77,6 +101,12 @@ export function RealTimeMap({ className = '', height = 'h-96' }: RealTimeMapProp
     return `${diffInDays}d ago`
   }
 
+  const getConnectionStatusText = () => {
+    if (!hasLocationSubscription) return 'Real-time disabled'
+    if (isConnected) return 'Live updates active'
+    return 'Connecting...'
+  }
+
   if (isLoading) {
     return (
       <div className={`${className} ${height} bg-gray-100 rounded-lg flex items-center justify-center`}>
@@ -90,10 +120,35 @@ export function RealTimeMap({ className = '', height = 'h-96' }: RealTimeMapProp
   return (
     <div className={`${className} ${height} bg-white rounded-lg shadow-sm overflow-hidden`}>
       <div className="p-4 border-b">
-        <h3 className="text-lg font-semibold text-gray-900">Real-Time Employee Locations</h3>
-        <p className="text-sm text-gray-600">
-          {employeeLocations?.length || 0} active employees
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Real-Time Employee Locations</h3>
+            <p className="text-sm text-gray-600">
+              {employeeLocations?.length || 0} active employees
+            </p>
+          </div>
+          
+          {showConnectionStatus && (
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center gap-1 text-xs ${
+                isConnected ? 'text-green-600' : 'text-yellow-600'
+              }`}>
+                {isConnected ? (
+                  <Wifi className="h-3 w-3" />
+                ) : (
+                  <WifiOff className="h-3 w-3" />
+                )}
+                <span>{getConnectionStatusText()}</span>
+              </div>
+              
+              {lastUpdate && (
+                <div className="text-xs text-gray-500">
+                  Last update: {lastUpdate.toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       
       <div className="relative h-full">
@@ -110,13 +165,14 @@ export function RealTimeMap({ className = '', height = 'h-96' }: RealTimeMapProp
           
           {employeeLocations?.map((location: EmployeeLocation) => {
             const isActive = new Date(location.timestamp).getTime() > Date.now() - 5 * 60 * 1000 // Active if within 5 minutes
+            const isRealtime = isConnected && hasLocationSubscription
             const isSelected = selectedEmployee === location.employee.id
             
             return (
               <Marker
                 key={location.id}
                 position={[location.latitude, location.longitude]}
-                icon={getEmployeeIcon(isActive)}
+                icon={getEmployeeIcon(isActive, isRealtime)}
                 eventHandlers={{
                   click: () => setSelectedEmployee(isSelected ? null : location.employee.id)
                 }}
@@ -137,10 +193,21 @@ export function RealTimeMap({ className = '', height = 'h-96' }: RealTimeMapProp
                       </span>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mb-2">
                       <MapPin className="h-4 w-4 text-gray-400" />
                       <span className="text-sm text-gray-600">
                         {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 mb-2">
+                      {isRealtime ? (
+                        <Wifi className="h-3 w-3 text-green-500" />
+                      ) : (
+                        <WifiOff className="h-3 w-3 text-gray-400" />
+                      )}
+                      <span className="text-xs text-gray-500">
+                        {isRealtime ? 'Live' : 'Cached'}
                       </span>
                     </div>
                     
@@ -166,7 +233,11 @@ export function RealTimeMap({ className = '', height = 'h-96' }: RealTimeMapProp
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              <span className="text-xs text-gray-600">Active (5min)</span>
+              <span className="text-xs text-gray-600">Live Active</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+              <span className="text-xs text-gray-600">Cached Active</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-gray-400"></div>
